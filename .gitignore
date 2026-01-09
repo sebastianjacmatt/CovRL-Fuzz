@@ -1,0 +1,31 @@
+# AFL binaries/tools
+AFL/
+AFL/afl-analyze
+AFL/afl-as
+AFL/afl-clang
+AFL/afl-clang++
+AFL/afl-fuzz
+AFL/afl-g++
+AFL/afl-gcc
+AFL/afl-gotcpu
+AFL/afl-showmap
+AFL/afl-tmin
+AFL/as
+
+# Python caches
+__pycache__/
+covrl/__pycache__/
+covrl/models/__pycache__/
+covrl/utils/__pycache__/
+tests/__pycache__/
+tests/covrl/__pycache__/
+tests/covrl/models/__pycache__/
+tests/covrl/utils/__pycache__/
+
+# Output / artifacts
+model_output/
+saved/
+out_dir/
+base_path/
+MLM_Record/
+MLM_Record
