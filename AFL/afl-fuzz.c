@@ -287,6 +287,36 @@ static s8  interesting_8[]  = { INTERESTING_8 };
 static s16 interesting_16[] = { INTERESTING_8, INTERESTING_16 };
 static s32 interesting_32[] = { INTERESTING_8, INTERESTING_16, INTERESTING_32 };
 static int sock = 0;
+
+
+/*
+*
+* Problem: Under low exec/s with sustained discoveries, AFL may never reach
+* the end of queue (queue_cur never becomes NULL), so queue_cycle never
+* completes and any "once per cycle" logic never triggers.
+*
+* Solution: Define a cycle as "process only the queue entries that existed
+* when the cycle began". We snapshot the last element (queue_top) at cycle
+* start, and once that element has been executed, we force end-of-cycle by
+* setting queue_cur = NULL. Any new queue entries appended during the cycle
+* remain in the queue but are deferred to the next cycle.
+*
+* Env:
+*   AFL_SNAPSHOT_CYCLES=1
+*   AFL_SNAPSHOT_COVRL_FINETUNE=1  (trigger CovRL finetune at each snapshot boundary)
+*/
+
+static u8 snapshot_cycles_enabled;
+static u8 snapshot_covrl_finetune_enabled;
+static struct queue_entry* snapshot_cycle_end;
+
+static void covrl_trigger_finetune(void) {
+  u16 buf[4];
+  if (!sock) return;
+  send(sock, "finetune", 8, 0);
+  if (recv(sock, buf, 2, 0) == -1) perror("Received Failed\n");
+}
+
 /* Fuzzing stages */
 
 enum {
@@ -5482,9 +5512,13 @@ static void sync_fuzzers(int sock, char** argv) {
   u16 buf[4];
   u16* fname;
         
-  send(sock, "finetune", 8, 0); 
-  if(recv(sock, buf, 2, 0) == -1){
-    perror("Received Failed\n");
+  /* If snapshot cycle finetune is enabled, we do NOT finetune on sync, 
+    otherwise we'll get extra / duplicate finetune triggers. */
+  if (!snapshot_covrl_finetune_enabled) {
+    send(sock, "finetune", 8, 0);
+    if (recv(sock, buf, 2, 0) == -1) {
+      perror("Received Failed\n");
+    }
   }
 
   /* Look at the entries created for every other fuzzer in the sync directory. */
@@ -6888,7 +6922,13 @@ int main(int argc, char** argv) {
   ACTF("connection success: %s\n", buf);
   if(read(sock, buf, 8) == -1){
         PFATAL("received failed\n");
-      } 
+      }
+
+  /* Snapshot-based cycles are disabled by default (opt-in). */
+  snapshot_cycles_enabled = !!getenv("AFL_SNAPSHOT_CYCLES");
+  snapshot_covrl_finetune_enabled = !!getenv("AFL_SNAPSHOT_COVRL_FINETUNE");
+  snapshot_cycle_end = NULL;
+
   perform_dry_run(use_argv);
 
   cull_queue();
@@ -6922,6 +6962,15 @@ int main(int argc, char** argv) {
       current_entry     = 0;
       cur_skipped_paths = 0;
       queue_cur         = queue;
+      
+      /* Snapshot cycle boundary start: remember where the queue ended *at the
+         start* of this cycle. New entries appended during this cycle will be
+         deferred to the next cycle by ending once we execute this entry. */
+      if (snapshot_cycles_enabled) {
+        snapshot_cycle_end = queue_top; /* may be NULL if queue is empty */
+      } else {
+        snapshot_cycle_end = NULL;
+      }
 
       while (seek_to) {
         current_entry++;
@@ -6952,6 +7001,12 @@ int main(int argc, char** argv) {
 
     }
 
+    /* Keep a pointer to the entry we're about to execute. We need this because
+       fuzz_one() may add new queue entries and queue_top may move. */
+    struct queue_entry* executed_entry = queue_cur;
+
+  
+
     skipped_fuzz = fuzz_one(use_argv);
   
     if (!stop_soon && sync_id && !skipped_fuzz) {
@@ -6965,6 +7020,24 @@ int main(int argc, char** argv) {
     if (!stop_soon && exit_1) stop_soon = 2;
 
     if (stop_soon) break;
+
+    
+    /* Snapshot cycle termination:
+        If we just executed the last entry that existed at cycle start,
+        force end-of-cycle now (even if the queue grew). */
+    if (snapshot_cycles_enabled && snapshot_cycle_end &&
+        executed_entry == snapshot_cycle_end) {
+
+      /* Optional: trigger CovRL fine-tuning at the snapshot boundary. */
+      if (snapshot_covrl_finetune_enabled) {
+        covrl_trigger_finetune();
+      }
+
+      queue_cur = NULL;       /* next loop iteration starts a new cycle */
+      snapshot_cycle_end = NULL;
+      continue;
+    }
+
 
     queue_cur = queue_cur->next;
     current_entry++;
