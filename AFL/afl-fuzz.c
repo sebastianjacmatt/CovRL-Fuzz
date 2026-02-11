@@ -155,6 +155,8 @@ static volatile u8 stop_soon,         /* Ctrl-C pressed?                  */
                    clear_screen = 1,  /* Window resized?                  */
                    child_timed_out;   /* Traced process timed out?        */
 
+static u32 sync_interval_cnt_g = 0;
+
 EXP_ST u32 queued_paths,              /* Total number of queued testcases */
            queued_variable,           /* Testcases with variable behavior */
            queued_at_start,           /* Total number of initial inputs   */
@@ -4352,6 +4354,20 @@ static void show_stats(void) {
   SAYF(bV bSTOP "        trim : " cRST "%-37s " bSTG bVR bH20 bH2 bH2 bRB "\n"
        bLB bH30 bH20 bH2 bH bRB bSTOP cRST RESET_G1, tmp);
 
+   /* --- CovRL sync progress (outside UI boxes) --- */
+
+  if (sync_id) {
+
+    u32 mod = sync_interval_cnt_g % SYNC_INTERVAL;
+    u32 next_in = (mod == 0) ? 0 : (SYNC_INTERVAL - mod);
+
+    SAYF("\n[sync progress] cnt=%s  mod=%s  next_in=%s\n",
+         DI((u64)sync_interval_cnt_g),
+         DI((u64)mod),
+         DI((u64)next_in));
+
+  }
+
   /* Provide some CPU utilization stats. */
 
   if (cpu_core_count) {
@@ -6564,7 +6580,7 @@ int main(int argc, char** argv) {
 
   s32 opt;
   u64 prev_queued = 0;
-  u32 sync_interval_cnt = 0, seek_to;
+  u32 seek_to;
   u8  *extras_dir = 0;
   u8  mem_limit_given = 0;
   u8  exit_1 = !!getenv("AFL_BENCH_JUST_ONE");
@@ -6956,7 +6972,7 @@ int main(int argc, char** argv) {
   
     if (!stop_soon && sync_id && !skipped_fuzz) {
       
-      if (!(sync_interval_cnt++ % SYNC_INTERVAL))
+      if (!(sync_interval_cnt_g++ % SYNC_INTERVAL))
       
         sync_fuzzers(sock, use_argv);
 
