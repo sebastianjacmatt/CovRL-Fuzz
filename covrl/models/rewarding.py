@@ -217,6 +217,12 @@ class Rewarding:
     def get_reward(self, dataset):
         # Filter entries where the reward value is 0
         mask = dataset["reward"] == 0
+        print("rewarding.get_reward debug")
+        print("dataset len:", len(dataset))
+        print("columns:", list(dataset.columns))
+        print("mask true:", int(mask.sum()) if "mask" in locals() else "mask not set")
+        print("bitmap non-null:", int(dataset["bitmap"].notna().sum()) if "bitmap" in dataset.columns else "no bitmap col")
+        print("reward counts:", dataset["reward"].value_counts(dropna=False).to_dict() if "reward" in dataset.columns else "no reward col")
         bitmaps = np.vstack(dataset.loc[mask, "bitmap"])
 
         # Calculate tf-idf scores for each bitmap in a vectorized manner

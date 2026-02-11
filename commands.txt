@@ -1,0 +1,6 @@
+python do_covrl.py --config ./config/sample_config.json --port 1111 --model_path Salesforce/codet5p-220m --predict_path out/runX/fuzzer01
+
+
+
+
+PORT=1111 VOCAB_SIZE=32100 ./AFL/afl-fuzz -t 1000 -a 1 -m none -M fuzzer01 -i ./save_dir/testsuites -o ./out/runX ~/home/sebastian/Documents/master/jerryscript/build/bin/jerry @@

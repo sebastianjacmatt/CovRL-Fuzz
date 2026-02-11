@@ -38,7 +38,7 @@ class ActorDataset(Dataset):
             splits = (
                 np.cumsum(
                     np.random.multinomial(
-                        total_length - num_segments, [1.0] * num_segments
+                        total_length - num_segments, [1.0 / num_segments] * num_segments
                     )
                 )
                 + 1
@@ -99,15 +99,14 @@ class ActorDataset(Dataset):
         )
 
         input_ids = torch.tensor(
-            self.pad_tokens(input_ids), dtype=torch.long, device=self.device
+            self.pad_tokens(input_ids), dtype=torch.long
         )
         attention_mask = torch.tensor(
             self.pad_tokens(attention_mask, pad_id=0),
             dtype=torch.long,
-            device=self.device,
         )
         labels = torch.tensor(
-            self.pad_tokens(labels, pad_id=0), dtype=torch.long, device=self.device
+            self.pad_tokens(labels, pad_id=0), dtype=torch.long
         )
         return input_ids, labels, attention_mask
 
