@@ -68,6 +68,10 @@ class FineTuner:
         self.critic = None
         self.actor = None
         self.scaler = None  # No need with Hugging Face Trainer
+        
+        self._reward_lut = None
+        self._reward_lut_device = None
+        self._reward_lut_dtype = None
 
     def load_critic(self):
         if self.critic:
@@ -131,7 +135,7 @@ class FineTuner:
         self.critic_path = self.save_model(self.critic, f"critic_final")
         return self.critic_path
 
-    def compute_actor_loss(self, cur_outputs, prev_actor, critic, inputs):
+    def compute_actor_loss(self, cur_outputs, prev_actor, critic, inputs):        
         # Set critic and previous actor to evaluation mode
         critic.eval()
         prev_actor.eval()
@@ -143,7 +147,7 @@ class FineTuner:
             "attention_mask": torch.cat(
                 (
                     inputs["attention_mask"],
-                    torch.ones_like(cur_predictions, dtype=torch.long),
+                    torch.ones_like(cur_predictions),
                 ),
                 dim=1,
             ),
@@ -155,8 +159,12 @@ class FineTuner:
 
         # Convert scores to reward signal
         pred_labels = torch.argmax(critic_scores, dim=-1)
-        reward = torch.tensor([label_to_score[label.item()] for label in pred_labels])
-        reward = reward.unsqueeze(1).unsqueeze(2)
+        
+        device = cur_outputs.logits.device
+	    dtype = cur_outputs.logits.dtype
+
+        lut = self._get_reward_lut(device=device, dtype=dtype)
+        reward = lut[pred_labels].view(-1, 1, 1)
 
         log_prob_fct = nn.LogSoftmax(dim=-1)
         cur_log_probs = log_prob_fct(cur_outputs.logits)
@@ -176,6 +184,9 @@ class FineTuner:
         self.actor = self.load_actor(self.actor_path)
         self.prev_actor = self.load_actor(self.actor_path)
         self.critic = self.load_critic() if self.critic_path else self.actor_path
+
+        self.prev_actor.to(self.device)
+        self.critic.to(self.device)
 
         self.prev_actor.eval()  # Actor in evaluation mode
         self.critic.eval()  # Critic in evaluation mode
@@ -203,6 +214,26 @@ class FineTuner:
         trainer.train()
         self.actor_path = self.save_model(self.actor, "actor_final")
         return self.actor_path
+
+    def _get_reward_lut(self, device, dtype):
+        # build once per (device, dtype)
+        if (
+            self._reward_lut is not None
+            and self._reward_lut_device == device
+            and self._reward_lut_dtype == dtype
+        ):
+            return self._reward_lut
+
+        max_label = max(label_to_score.keys())
+        lut = torch.empty(max_label + 1, device=device, dtype=dtype)
+        for k, v in label_to_score.items():
+            lut[int(k)] = float(v)
+
+        self._reward_lut = lut
+        self._reward_lut_device = device
+        self._reward_lut_dtype = dtype
+        return lut
+
 
     def preprocess_dataset(self, dataset_path):
         df = pd.read_json(dataset_path)
@@ -288,8 +319,9 @@ class FineTuner:
                 self.mutation_dataset, is_update_idf=True
             )
 
+            n = min(len(self.mutation_dataset) * 4, len(self.train_dataset))
             train_dataset = self.reward_object.update(
-                self.train_dataset.sample(len(self.mutation_dataset) * 4, len(self.train_dataset), ignore_index=True),
+                self.train_dataset.sample(n=n, ignore_index=True),
                 is_update_idf=False,
             )
             self.dataset = pd.concat(
