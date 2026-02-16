@@ -159,9 +159,9 @@ class FineTuner:
 
         # Convert scores to reward signal
         pred_labels = torch.argmax(critic_scores, dim=-1)
-        
+
         device = cur_outputs.logits.device
-	    dtype = cur_outputs.logits.dtype
+        dtype = cur_outputs.logits.dtype
 
         lut = self._get_reward_lut(device=device, dtype=dtype)
         reward = lut[pred_labels].view(-1, 1, 1)
