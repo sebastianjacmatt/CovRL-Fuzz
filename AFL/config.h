@@ -202,9 +202,9 @@
 
 /* Sync interval (every n havoc cycles): */
 
-#define SYNC_INTERVAL       100
+#define SYNC_INTERVAL       1
 
-/* Output directory reuse grace period (minutes): */
+/* Output directory reuse grace period ( minutes): */
 
 #define OUTPUT_GRACE        25
 
