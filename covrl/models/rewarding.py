@@ -226,6 +226,6 @@ class Rewarding:
         sigmoid_rewards = 1 / (1 + np.exp(-rewards))
         rounded_rewards = np.round(sigmoid_rewards, 2)
 
-        dataset.loc[mask, "reward"] = rounded_rewards
+        dataset.loc[mask, "reward"] = rounded_rewards.astype("float32")
 
         return dataset.drop("bitmap", axis="columns")
