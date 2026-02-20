@@ -173,24 +173,25 @@ class Inferencer:
 
     def _generate_predictions(self, input_ids, attention_mask, num_samples):
         """Generate predictions using the specified sampling method."""
-        if self.sample_method == "contrastive":
-            outputs = self.model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                do_sample=True,
-                penalty_alpha=0.6,
-                top_k=num_samples,
-                eos_token_id=self.tokenizer.eos_token_id,
-                no_repeat_ngram_size=3,
-                min_length=1,
-                max_length=self.max_pred_length,
-            )
-        else:
-            outputs = self.model.generate(
-                input_ids=input_ids,
-                top_k=num_samples,
-                eos_token_id=self.tokenizer.eos_token_id,
-                no_repeat_ngram_size=3,
-                max_length=self.max_pred_length,
-            )
+        with torch.no_grad():
+            if self.sample_method == "contrastive":
+                outputs = self.model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    do_sample=True,
+                    penalty_alpha=0.6,
+                    top_k=num_samples,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    no_repeat_ngram_size=3,
+                    min_length=1,
+                    max_length=self.max_pred_length,
+                )
+            else:
+                outputs = self.model.generate(
+                    input_ids=input_ids,
+                    top_k=num_samples,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    no_repeat_ngram_size=3,
+                    max_length=self.max_pred_length,
+                )
         return outputs.tolist()[0]

@@ -154,8 +154,8 @@ if __name__ == "__main__":
     )
     arg_parser.add_argument("--model_path", required=False, default="Salesforce/codet5p-220m", type=str,  help="Path to the pretrained model.")
     arg_parser.add_argument(
-        "--sample_method", required=False, type=str, default="contrastive", choices=["contrastive"],
-        help="Sampling method for inference. Currently supports 'contrastive' only. Defaults to 'contrastive'."
+        "--sample_method", required=False, type=str, default="contrastive", choices=["contrastive", "greedy"],
+        help="Sampling method for inference. 'contrastive' (default) or 'greedy' (faster)."
     )
     arg_parser.add_argument("--predict_path", required=True, type=str, help="Path to save prediction results.")
     args = arg_parser.parse_args(sys.argv[1:])
