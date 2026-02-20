@@ -33,6 +33,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* LLVM_VERSION_MAJOR is injected at compile time via -DLLVM_VERSION_MAJOR=<N>
+   in the Makefile using: llvm-config --version */
+#ifndef LLVM_VERSION_MAJOR
+#  define LLVM_VERSION_MAJOR 0
+#endif
+
 static u8*  obj_path;               /* Path to runtime libraries         */
 static u8** cc_params;              /* Parameters passed to the real CC  */
 static u32  cc_par_cnt = 1;         /* Param count, including argv0      */
@@ -123,6 +129,9 @@ static void edit_params(u32 argc, char** argv) {
   cc_params[cc_par_cnt++] = "-fsanitize-coverage=trace-pc-guard";
   cc_params[cc_par_cnt++] = "-mllvm";
   cc_params[cc_par_cnt++] = "-sanitizer-coverage-block-threshold=0";
+#elif LLVM_VERSION_MAJOR >= 17
+  /* LLVM 17+ removed legacy -Xclang -load; use -fpass-plugin= instead */
+  cc_params[cc_par_cnt++] = alloc_printf("-fpass-plugin=%s/afl-llvm-pass.so", obj_path);
 #else
   cc_params[cc_par_cnt++] = "-Xclang";
   cc_params[cc_par_cnt++] = "-load";

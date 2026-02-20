@@ -36,34 +36,20 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Config/llvm-config.h"
+
+#if LLVM_VERSION_MAJOR < 17
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#else
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/PassPlugin.h"
+#endif
 
 using namespace llvm;
 
-namespace {
+/* Shared instrumentation logic, called by both old and new pass manager */
 
-  class AFLCoverage : public ModulePass {
-
-    public:
-
-      static char ID;
-      AFLCoverage() : ModulePass(ID) { }
-
-      bool runOnModule(Module &M) override;
-
-      // StringRef getPassName() const override {
-      //  return "American Fuzzy Lop Instrumentation";
-      // }
-
-  };
-
-}
-
-
-char AFLCoverage::ID = 0;
-
-
-bool AFLCoverage::runOnModule(Module &M) {
+static bool instrumentModule(Module &M) {
 
   LLVMContext &C = M.getContext();
 
@@ -124,20 +110,20 @@ bool AFLCoverage::runOnModule(Module &M) {
 
       /* Load prev_loc */
 
-      LoadInst *PrevLoc = IRB.CreateLoad(AFLPrevLoc);
+      LoadInst *PrevLoc = IRB.CreateLoad(Int32Ty, AFLPrevLoc);
       PrevLoc->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
       Value *PrevLocCasted = IRB.CreateZExt(PrevLoc, IRB.getInt32Ty());
 
       /* Load SHM pointer */
 
-      LoadInst *MapPtr = IRB.CreateLoad(AFLMapPtr);
+      LoadInst *MapPtr = IRB.CreateLoad(PointerType::get(Int8Ty, 0), AFLMapPtr);
       MapPtr->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
       Value *MapPtrIdx =
-          IRB.CreateGEP(MapPtr, IRB.CreateXor(PrevLocCasted, CurLoc));
+          IRB.CreateGEP(Int8Ty, MapPtr, IRB.CreateXor(PrevLocCasted, CurLoc));
 
       /* Update bitmap */
 
-      LoadInst *Counter = IRB.CreateLoad(MapPtrIdx);
+      LoadInst *Counter = IRB.CreateLoad(Int8Ty, MapPtrIdx);
       Counter->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
       Value *Incr = IRB.CreateAdd(Counter, ConstantInt::get(Int8Ty, 1));
       IRB.CreateStore(Incr, MapPtrIdx)
@@ -170,6 +156,29 @@ bool AFLCoverage::runOnModule(Module &M) {
 }
 
 
+/* ===== Legacy pass manager (LLVM < 17) ===== */
+
+#if LLVM_VERSION_MAJOR < 17
+
+namespace {
+
+  class AFLCoverage : public ModulePass {
+
+    public:
+
+      static char ID;
+      AFLCoverage() : ModulePass(ID) { }
+
+      bool runOnModule(Module &M) override {
+        return instrumentModule(M);
+      }
+
+  };
+
+}
+
+char AFLCoverage::ID = 0;
+
 static void registerAFLPass(const PassManagerBuilder &,
                             legacy::PassManagerBase &PM) {
 
@@ -177,9 +186,46 @@ static void registerAFLPass(const PassManagerBuilder &,
 
 }
 
-
 static RegisterStandardPasses RegisterAFLPass(
     PassManagerBuilder::EP_OptimizerLast, registerAFLPass);
 
 static RegisterStandardPasses RegisterAFLPass0(
     PassManagerBuilder::EP_EnabledOnOptLevel0, registerAFLPass);
+
+
+/* ===== New pass manager (LLVM >= 17) ===== */
+
+#else
+
+namespace {
+
+  struct AFLCoverage : public PassInfoMixin<AFLCoverage> {
+
+    PreservedAnalyses run(Module &M, ModuleAnalysisManager &MAM) {
+      instrumentModule(M);
+      return PreservedAnalyses::all();
+    }
+
+    static bool isRequired() { return true; }
+
+  };
+
+}
+
+extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
+llvmGetPassPluginInfo() {
+  return {LLVM_PLUGIN_API_VERSION, "AFLCoverage", "v0.1",
+          [](PassBuilder &PB) {
+            PB.registerOptimizerLastEPCallback(
+                [](ModulePassManager &MPM, OptimizationLevel OL) {
+                  MPM.addPass(AFLCoverage());
+                });
+            PB.registerPipelineStartEPCallback(
+                [](ModulePassManager &MPM, OptimizationLevel OL) {
+                  if (OL == OptimizationLevel::O0)
+                    MPM.addPass(AFLCoverage());
+                });
+          }};
+}
+
+#endif
