@@ -62,8 +62,8 @@
 /* Number of calibration cycles per every new test case (and for test
    cases that show variable behavior): */
 
-#define CAL_CYCLES          8
-#define CAL_CYCLES_LONG     40
+#define CAL_CYCLES          4
+#define CAL_CYCLES_LONG     8
 
 /* Number of subsequent timeouts before abandoning an input file: */
 
@@ -74,10 +74,13 @@
 #define KEEP_UNIQUE_HANG    500
 #define KEEP_UNIQUE_CRASH   5000
 
-/* Baseline number of random tweaks during a single 'havoc' stage: */
+/* Baseline number of random tweaks during a single 'havoc' stage:
+   Reduced from 256/1024 to 16/32 because each CovRL cycle involves a
+   blocking LLM inference call (~100ms), making the original values
+   produce thousands of seconds per queue entry. */
 
-#define HAVOC_CYCLES        256
-#define HAVOC_CYCLES_INIT   1024
+#define HAVOC_CYCLES        16
+#define HAVOC_CYCLES_INIT   32
 
 /* Maximum multiplier for the above (should be a power of two, beware
    of 32-bit int overflows): */
@@ -86,7 +89,7 @@
 
 /* Absolute minimum number of havoc cycles (after all adjustments): */
 
-#define HAVOC_MIN           16
+#define HAVOC_MIN           4
 
 /* Maximum stacking for havoc-stage tweaks. The actual value is calculated
    like this: 
