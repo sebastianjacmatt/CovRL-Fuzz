@@ -222,14 +222,10 @@ extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
 llvmGetPassPluginInfo() {
   return {LLVM_PLUGIN_API_VERSION, "AFLCoverage", "v0.1",
           [](PassBuilder &PB) {
-            PB.registerOptimizerLastEPCallback(
-                [](ModulePassManager &MPM, OptimizationLevel OL) {
-                  MPM.addPass(AFLCoverage());
-                });
+            /* Register for all optimization levels including O0 */
             PB.registerPipelineStartEPCallback(
                 [](ModulePassManager &MPM, OptimizationLevel OL) {
-                  if (OL == OptimizationLevel::O0)
-                    MPM.addPass(AFLCoverage());
+                  MPM.addPass(AFLCoverage());
                 });
           }};
 }
