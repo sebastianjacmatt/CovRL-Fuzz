@@ -4,11 +4,11 @@
 
     "seed": 42,
     "load_path": "Salesforce/codet5p-220m",
-    "critic_epochs": 2,
+    "critic_epochs": 1,
     "actor_epochs": 1,
-    "total_batch_size": 256,
-    "train_batch_size": 8,
-    "eval_batch_size": 32,
+    "total_batch_size": 128,
+    "train_batch_size": 4,
+    "eval_batch_size": 16,
     "learning_rate": 1e-4,
 
     "n_samples": 1,
