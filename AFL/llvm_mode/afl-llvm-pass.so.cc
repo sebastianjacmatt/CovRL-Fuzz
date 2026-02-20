@@ -38,6 +38,12 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Config/llvm-config.h"
 
+#if LLVM_VERSION_MAJOR >= 16
+#define AFL_NONE std::nullopt
+#else
+#define AFL_NONE None
+#endif
+
 #if LLVM_VERSION_MAJOR < 17
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #else
@@ -111,29 +117,29 @@ static bool instrumentModule(Module &M) {
       /* Load prev_loc */
 
       LoadInst *PrevLoc = IRB.CreateLoad(Int32Ty, AFLPrevLoc);
-      PrevLoc->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+      PrevLoc->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, AFL_NONE));
       Value *PrevLocCasted = IRB.CreateZExt(PrevLoc, IRB.getInt32Ty());
 
       /* Load SHM pointer */
 
       LoadInst *MapPtr = IRB.CreateLoad(PointerType::get(Int8Ty, 0), AFLMapPtr);
-      MapPtr->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+      MapPtr->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, AFL_NONE));
       Value *MapPtrIdx =
           IRB.CreateGEP(Int8Ty, MapPtr, IRB.CreateXor(PrevLocCasted, CurLoc));
 
       /* Update bitmap */
 
       LoadInst *Counter = IRB.CreateLoad(Int8Ty, MapPtrIdx);
-      Counter->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+      Counter->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, AFL_NONE));
       Value *Incr = IRB.CreateAdd(Counter, ConstantInt::get(Int8Ty, 1));
       IRB.CreateStore(Incr, MapPtrIdx)
-          ->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+          ->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, AFL_NONE));
 
       /* Set prev_loc to cur_loc >> 1 */
 
       StoreInst *Store =
           IRB.CreateStore(ConstantInt::get(Int32Ty, cur_loc >> 1), AFLPrevLoc);
-      Store->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, None));
+      Store->setMetadata(M.getMDKindID("nosanitize"), MDNode::get(C, AFL_NONE));
 
       inst_blocks++;
 
