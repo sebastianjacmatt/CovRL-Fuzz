@@ -60,6 +60,11 @@ class Rewarding:
 
         df = np.zeros(self.bitmap_size, dtype=int)
         orig_data = dataset[dataset["is_orig"] == True]
+        orig_data = orig_data[orig_data["bitmap"].apply(lambda x: isinstance(x, (list, np.ndarray)))]
+
+        if orig_data.empty:
+            self.save_embedding()
+            return
 
         bitmap_data = np.vstack(orig_data["bitmap"].values)
 
@@ -152,7 +157,10 @@ class Rewarding:
 
     def fit(self, dataset):
 
-        unprocessed_data = dataset[~dataset["is_orig"]]
+        if "bitmap" in dataset.columns:
+            unprocessed_data = dataset[~dataset["bitmap"].apply(lambda x: isinstance(x, (list, np.ndarray)))]
+        else:
+            unprocessed_data = dataset
 
         setdir(os.path.join(self.save_dir, "tmp"))
         dir_path = setdir(os.path.join(self.save_dir, "decoded"))
