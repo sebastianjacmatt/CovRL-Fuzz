@@ -67,13 +67,16 @@ class Inferencer:
     def finetune(self, predict_path):
         print("Start fine-tuning...")
         is_first = self.finetuner.preprocess(predict_path)
-        self.finetuner.train_critic(epochs=self.config.critic_epochs)
+        self.finetuner.critic_path, critic_loss = self.finetuner.train_critic(
+            epochs=self.config.critic_epochs
+        )
+        actor_loss = float("nan")
         if not is_first:
-            self.model_path = self.finetuner.finetune_actor(
+            self.model_path, actor_loss = self.finetuner.finetune_actor(
                 epochs=self.config.actor_epochs
             )
         self.load_model(self.model_path)
-        return self.model_path
+        return self.model_path, actor_loss, critic_loss
 
     def masking(self, input_ids):
         """Apply masking to input IDs."""

@@ -128,8 +128,10 @@ class FineTuner:
         )
         print("Training critic model...")
         trainer.train()
+        critic_losses = [e["loss"] for e in trainer.state.log_history if "loss" in e]
+        critic_loss = sum(critic_losses) / len(critic_losses) if critic_losses else float("nan")
         self.critic_path = self.save_model(self.critic, f"critic_final")
-        return self.critic_path
+        return self.critic_path, critic_loss
 
     def compute_actor_loss(self, cur_outputs, prev_actor, critic, inputs):
         # Set critic and previous actor to evaluation mode
@@ -201,8 +203,10 @@ class FineTuner:
 
         print("Fine-tuning actor model with critic scoring...")
         trainer.train()
+        actor_losses = [e["loss"] for e in trainer.state.log_history if "loss" in e]
+        actor_loss = sum(actor_losses) / len(actor_losses) if actor_losses else float("nan")
         self.actor_path = self.save_model(self.actor, "actor_final")
-        return self.actor_path
+        return self.actor_path, actor_loss
 
     def preprocess_dataset(self, dataset_path):
         df = pd.read_json(dataset_path)

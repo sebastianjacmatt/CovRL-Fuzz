@@ -1,8 +1,11 @@
 import argparse
+import csv
+import math
 import os
 import socket
 import sys
 import psutil
+from datetime import datetime
 from struct import pack
 from torch import cuda
 
@@ -44,7 +47,7 @@ def decode_data(model, prediction_path):
     return len(decoded_data)
 
 
-def finetune(model, prediction_path):
+def finetune(model, prediction_path, finetune_index, csv_path):
     record_file = os.path.join(os.path.dirname(prediction_path), "MLM_Record")
     with open(record_file, "rb") as reader:
         try:
@@ -57,8 +60,20 @@ def finetune(model, prediction_path):
 
     print(f"The model path is {model_path}")
     write(record_file, content="")
-    new_path = model.finetune(prediction_path)
+    new_path, actor_loss, critic_loss = model.finetune(prediction_path)
     write(record_file, content=new_path)
+
+    is_new = not os.path.exists(csv_path)
+    with open(csv_path, "a", newline="") as f:
+        writer = csv.writer(f)
+        if is_new:
+            writer.writerow(["finetune_index", "timestamp", "actor_loss", "critic_loss"])
+        writer.writerow([
+            finetune_index,
+            datetime.utcnow().isoformat(),
+            "" if math.isnan(actor_loss) else actor_loss,
+            "" if math.isnan(critic_loss) else critic_loss,
+        ])
 
 
 def start_server(
@@ -92,6 +107,7 @@ def start_server(
     write(os.path.join(PREDICTION_PATH, "MLM_pred"), content="")
     conn.sendall(b"complete")
     data_len, finetune_cnt = 0, 0
+    csv_path = os.path.join(os.path.dirname(PREDICTION_PATH), "loss_log.csv")
 
     print("Start CovRL-Fuzz")
     while True:
@@ -107,7 +123,8 @@ def start_server(
         elif msg == b"finetune":
             print("Start finetune")
             if finetune_cnt % MAX_FINETUNE_CNT == 0 and mode == "finetune":
-                finetune(model, prediction_path=PREDICTION_PATH)
+                finetune(model, prediction_path=PREDICTION_PATH,
+                         finetune_index=finetune_cnt, csv_path=csv_path)
             finetune_cnt += 1
             conn.sendall(pack("<H", 10))
 
